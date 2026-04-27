@@ -1690,7 +1690,7 @@ chem_spack_ros_dyndt.o : $(CCATT)/chem_spack_ros_dyndt.f90 chem_spack_lu.o mem_s
 	$(F_COMMAND) $(<F:.f90=.f90) $(EXTRAFLAGSF)
 	@mv -f $(<F:.f90=.f90) ../doc/src
 
-chem_spack_rodas3_dyndt.o : $(CCATT)/chem_spack_rodas3_dyndt.f90  chem_spack_lu.o mem_scalar.o mem_grid.o mem_all.o\
+chem_spack_rodas3_dyndt.o : $(CCATT)/chem_spack_rodas3_dyndt.F90  chem_spack_lu.o mem_scalar.o mem_grid.o mem_all.o\
         mem_basic.o mem_micro.o mem_radiate.o chem1_list.o mem_chem1.o aer1_list.o mem_aer1.o \
 	chem_spack_solve_sparse.o mem_spack.o  chem_fastjx_driv.o chem_uv_att.o
 	@cp -f  $< $(<F:.f90=.f90)

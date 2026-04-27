@@ -40,11 +40,32 @@ MODULE mod_chem_spack_rodas3_dyndt
 
   PRIVATE
 
+  logical, parameter :: shuffle=.false. 
 
   PUBLIC chem_rodas3_dyndt
 
 
 CONTAINS
+
+#define CHECK_NF90(x) call check_nf_err(x, __LINE__, __FILE__)
+
+  subroutine check_nf_err(iErr, line, filename)
+
+    use netcdf, only: nf90_noerr, &
+      nf90_strerror
+    implicit none
+
+    INTEGER, INTENT(IN) :: iErr
+    INTEGER, INTENT(IN) :: line
+    CHARACTER(LEN=*), INTENT(IN) :: filename
+
+    if (iErr /= nf90_noerr) then
+        print *, "NF90 ERROR: ", trim(nf90_strerror(iErr))
+        print *, "At line ", line, " in file ", filename
+        call exit(iErr)
+    end if
+
+  end subroutine check_nf_err
 
   !========================================================================================
   SUBROUTINE chem_rodas3_dyndt(m1,m2,m3,dtlt,pp,pi0,theta,rv,dn0,cosz,rcp, &
@@ -829,8 +850,7 @@ call write_output(time, m1, m2, m3, processor, chem1_g, nspecies)
 
 END SUBROUTINE chem_rodas3_dyndt
 
-
-subroutine write_input(time, processor, m1, m2, m3, nspecies, nr, nr_photo, maxnspecies, &
+subroutine write_input_bin(time, processor, m1, m2, m3, nspecies, nr, nr_photo, maxnspecies, &
                       nspecies_chem_transported, nspecies_chem_no_transported, &
                       nob, maxblock_size, na_extra3d, dtlt, pp, pi0, theta , rv, dn0, rcp, &
                       cosz, weight, atol, rtol, jphoto, att, block_end, indexk, indexi, &
@@ -885,130 +905,556 @@ subroutine write_input(time, processor, m1, m2, m3, nspecies, nr, nr_photo, maxn
         write(filename, fmt='("chem_ia/chem_inp_",I6.6,"-",I4.4,".bin")') int(time),processor
         print *,"File to write: ",filename
         open (newunit=iunit, file=filename, status="replace", form="unformatted", action="write")    
-        write(iunit)  m1 !int scalar
-        write(iunit)  m2 !int scalar
-        write(iunit)  m3 !int scalar
+        write(iunit)  m1 !int scalar @D
+        write(iunit)  m2 !int scalar @D
+        write(iunit)  m3 !int scalar @D
 
-        write(iunit)  nspecies   !int scalar
-        write(iunit)  nr_photo   !int scalar
-        write(iunit)  nr         !int scalar
-        write(iunit)  maxnspecies !int scalar
-        write(iunit)  nspecies_chem_transported !int scalar
-        write(iunit)  nspecies_chem_no_transported !int scalar
-        write(iunit)  nob        !int scalar
-        write(iunit)  maxblock_size !int scalar
-        write(iunit)  na_extra3d !int scalar
-        write(iunit)  n_dyn_chem !int scalar
+        write(iunit)  nspecies   !int scalar @D
+        write(iunit)  nr_photo   !int scalar @D
+        write(iunit)  nr         !int scalar @D
+        write(iunit)  maxnspecies !int scalar @D
+        write(iunit)  nspecies_chem_transported !int scalar @p
+        write(iunit)  nspecies_chem_no_transported !int scalar @p
+        write(iunit)  nob        !int scalar @D
+        write(iunit)  maxblock_size !int scalar @D
+        write(iunit)  na_extra3d !int scalar @D
+        write(iunit)  n_dyn_chem !int scalar @p
 
-        write(iunit)  block_end ! int 1D (nob)
-        write(iunit)  indexk ! int 2D (maxblock_size,nob)
-        write(iunit)  indexi ! int 2D (maxblock_size,nob)
-        write(iunit)  indexj ! int 2D (maxblock_size,nob)
-        write(iunit)  kij_index ! int 2D (maxblock_size,nob)
-        write(iunit)  transp_chem_index ! int 1D (maxnspecies)
-        write(iunit)  no_transp_chem_index ! int 1D (maxnspecies)
+        write(iunit)  block_end ! @p int 1D (nob) @d              
+        write(iunit)  indexk ! @p int 2D (maxblock_size,nob) @d
+        write(iunit)  indexi ! @p int 2D (maxblock_size,nob) @d
+        write(iunit)  indexj ! @p int 2D (maxblock_size,nob) @d
+        write(iunit)  kij_index ! @p int 2D (maxblock_size,nob) @d
+        write(iunit)  transp_chem_index ! @p int 1D (maxnspecies) @d
+        write(iunit)  no_transp_chem_index ! @p int 1D (maxnspecies) @d
 
-        write(iunit)  dtlt   !real scalar
-        write(iunit)  cp     !real scalar
-        write(iunit)  cpor   !real scalar
-        write(iunit)  p00    !real scalar
-        write(iunit)  pp     !real 3D (m1,m2,m3) 
-        write(iunit)  pi0    !real 3D (m1,m2,m3)
-        write(iunit)  theta  !real 3D (m1,m2,m3)
-        write(iunit)  rv     !real 3D (m1,m2,m3)
-        write(iunit)  dn0    !real 3D (m1,m2,m3)
-        write(iunit)  rcp    !real 3D (m1,m2,m3)
-        write(iunit)  cosz   !real 3D (m1,m2,m3)
-        write(iunit)  weight !real 1D (nspecies)
-        write(iunit)  att    !real 2D (m2,m3)
+        write(iunit)  dtlt   !real scalar @p
+        write(iunit)  cp     !real scalar @p
+        write(iunit)  cpor   !real scalar @p
+        write(iunit)  p00    !real scalar @p
+        write(iunit)  pp     !real 3D (m1,m2,m3) @d p
+        write(iunit)  pi0    !real 3D (m1,m2,m3) @d p
+        write(iunit)  theta  !real 3D (m1,m2,m3) @d p
+        write(iunit)  rv     !real 3D (m1,m2,m3) @d p
+        write(iunit)  dn0    !real 3D (m1,m2,m3) @d p
+        write(iunit)  rcp    !real 3D (m1,m2,m3) @d p
+        write(iunit)  cosz   !real 3D (m1,m2,m3) @d p
+        write(iunit)  weight !real 1D (nspecies) @d p
+        write(iunit)  att    !real 2D (m2,m3) @d p
         
-        write(iunit)  last_accepted_dt !double 1D (:)
-        write(iunit)  atol !double 1D (nspecies)
-        write(iunit)  rtol !double 1D (nspecies)
-        write(iunit)  jphoto !double 4D (nr_photo,m1,m2,m3)
+        write(iunit)  last_accepted_dt !double 1D (:) @D* @d p
+        write(iunit)  atol !double 1D (nspecies) @d p
+        write(iunit)  rtol !double 1D (nspecies) @d p
+        write(iunit)  jphoto !double 4D (nr_photo,m1,m2,m3) @d p
 
-        write(iunit)  get_non_zeros !scalar logical
+        write(iunit)  get_non_zeros !scalar logical @p
         
-        write(iunit)  PhotojMethod ! char 10 len
-        write(iunit)  split_method ! char 20 len
+        write(iunit)  PhotojMethod ! char 10 len @p
+        write(iunit)  split_method ! char 20 len @p
 
         do ispc=1,nspecies
-            write(iunit) size(chem1_g(ispc)%sc_t) !real
-            write(iunit) size(chem1_g(ispc)%sc_t_dyn) !real
+            write(iunit) size(chem1_g(ispc)%sc_t) ! @p int scalar
+            write(iunit) size(chem1_g(ispc)%sc_t_dyn) ! @p int scalar
         end do
 
-        write(iunit) grid_g(1)%glat !real 2d
-        write(iunit) grid_g(1)%glon !real 2d
+        write(iunit) grid_g(1)%glat !real 2d @D @d @p
+        write(iunit) grid_g(1)%glon !real 2d @D @d @p
 
-        write(iunit) spc_name ! char 1D(2D?) len 8 (nspecies)
+        write(iunit) spc_name ! char 1D(2D?) len 8 (nspecies) @d
 
         do ispc=1,nspecies
-             write(iunit)  chem1_g(ispc)%sc_p     ! real 3D (n1,n2,n3)
-             write(iunit)  chem1_g(ispc)%sc_t     ! real 1D (nmxp(ng)*nmyp(ng)*nmzp(ng))
-             write(iunit)  chem1_g(ispc)%sc_t_dyn ! real 1D (n1*n2*n3)
+             write(iunit)  chem1_g(ispc)%sc_p     !@d @p real 3D (n1,n2,n3)
+             write(iunit)  chem1_g(ispc)%sc_t     !@d @p real 1D (nmxp(ng)*nmyp(ng)*nmzp(ng))
+             write(iunit)  chem1_g(ispc)%sc_t_dyn !@d @p real 1D (n1*n2*n3) or 1
         end do
         !Double precision reals
         ! spack size is (nob), nob=1 is (supposed to) the default
-        write(iunit)  spack(1)%DLdrdc   !3D (1:maxblock_size,nspecies,nspecies))
-        write(iunit)  spack(1)%jphoto   !2D (1:maxblock_size,nr_photo))
-        write(iunit)  spack(1)%rk       !2D (1:maxblock_size,nr))
-        write(iunit)  spack(1)%w        !2D (1:maxblock_size,nr))
-        write(iunit)  spack(1)%sc_p     !2D (1:maxblock_size,nspecies))
-        write(iunit)  spack(1)%sc_p_new !2D (1:maxblock_size,nspecies))
-        write(iunit)  spack(1)%DLr	 	  !2D (1:maxblock_size,nspecies))
+        write(iunit)  spack(1)%DLdrdc   !@d @p 3D (1:maxblock_size,nspecies,nspecies))
+        write(iunit)  spack(1)%jphoto   !@d @p 2D (1:maxblock_size,nr_photo))
+        write(iunit)  spack(1)%rk       !@d @p 2D (1:maxblock_size,nr))
+        write(iunit)  spack(1)%w        !@d @p 2D (1:maxblock_size,nr))
+        write(iunit)  spack(1)%sc_p     !@d @p 2D (1:maxblock_size,nspecies))
+        write(iunit)  spack(1)%sc_p_new !@d @p 2D (1:maxblock_size,nspecies))
+        write(iunit)  spack(1)%DLr	 	!@d @p 2D (1:maxblock_size,nspecies))
 
-        write(iunit)  spack(1)%temp	    !1D (1:maxblock_size))
-        write(iunit)  spack(1)%press    !1D (1:maxblock_size))
-        write(iunit)  spack(1)%cosz	    !1D (1:maxblock_size))
-        write(iunit)  spack(1)%att	    !1D (1:maxblock_size)) 
-        write(iunit)  spack(1)%vapp     !1D (1:maxblock_size))
-        write(iunit)  spack(1)%volmol   !1D (1:maxblock_size))
-        write(iunit)  spack(1)%volmol_i !1D (1:maxblock_size))
-        write(iunit)  spack(1)%xlw      !1D (1:maxblock_size))
-        write(iunit)  spack(1)%err      !1D (1:maxblock_size))
+        write(iunit)  spack(1)%temp	    !@d @p 1D (1:maxblock_size))
+        write(iunit)  spack(1)%press    !@d @p 1D (1:maxblock_size))
+        write(iunit)  spack(1)%cosz	    !@d @p 1D (1:maxblock_size))
+        write(iunit)  spack(1)%att	    !@d @p 1D (1:maxblock_size)) 
+        write(iunit)  spack(1)%vapp     !@d @p 1D (1:maxblock_size))
+        write(iunit)  spack(1)%volmol   !@d @p 1D (1:maxblock_size))
+        write(iunit)  spack(1)%volmol_i !@d @p 1D (1:maxblock_size))
+        write(iunit)  spack(1)%xlw      !@d @p 1D (1:maxblock_size))
+        write(iunit)  spack(1)%err      !@d @p 1D (1:maxblock_size))
 
         ! spack_2d size is (maxblock_size,nob)
         do i = 1, 1
             do ijk = 1, maxblock_size
               ! double precision reals
-                write(iunit)  spack_2d(ijk,i)%DLmat !2D (nspecies, nspecies))
-                write(iunit)  spack_2d(ijk,i)%DLb1	!1D (nspecies)
-                write(iunit)  spack_2d(ijk,i)%DLb2	!1D (nspecies)
-                write(iunit)  spack_2d(ijk,i)%DLk1  !1D (nspecies)
-                write(iunit)  spack_2d(ijk,i)%DLk2  !1D (nspecies)
-                write(iunit)  spack_2d(ijk,i)%DLb3	!1D (nspecies)
-                write(iunit)  spack_2d(ijk,i)%DLb4	!1D (nspecies)
-                write(iunit)  spack_2d(ijk,i)%DLk3  !1D (nspecies)
-                write(iunit)  spack_2d(ijk,i)%DLk4  !1D (nspecies)
+                write(iunit)  spack_2d(ijk,i)%DLmat !@d @p 2D (nspecies, nspecies))
+                write(iunit)  spack_2d(ijk,i)%DLb1	!@d @p 1D (nspecies)
+                write(iunit)  spack_2d(ijk,i)%DLb2	!@d @p 1D (nspecies)
+                write(iunit)  spack_2d(ijk,i)%DLk1  !@d @p 1D (nspecies)
+                write(iunit)  spack_2d(ijk,i)%DLk2  !@d @p 1D (nspecies)
+                write(iunit)  spack_2d(ijk,i)%DLb3	!@d @p 1D (nspecies)
+                write(iunit)  spack_2d(ijk,i)%DLb4	!@d @p 1D (nspecies)
+                write(iunit)  spack_2d(ijk,i)%DLk3  !@d @p 1D (nspecies)
+                write(iunit)  spack_2d(ijk,i)%DLk4  !@d @p 1D (nspecies)
             end do
         end do 
 
         do i=1,na_extra3d
-            write(iunit)  extra3d(1)%d3 !real 3D (m1,m2,m3)
+            write(iunit)  extra3d(1)%d3 !@d real 3D (m1,m2,m3)
 
         end do
 
       close(iunit)
 
-end subroutine write_input
+end subroutine write_input_bin
 
+
+subroutine write_input(time, processor, m1, m2, m3, nspecies, nr, nr_photo, maxnspecies, &
+                      nspecies_chem_transported, nspecies_chem_no_transported, &
+                      nob, maxblock_size, na_extra3d, dtlt, pp, pi0, theta, rv, dn0, rcp, &
+                      cosz, weight, atol, rtol, jphoto, att, block_end, indexk, indexi, &
+                      indexj, kij_index, transp_chem_index, no_transp_chem_index, &
+                      extra3d, spack, spack_2d, last_accepted_dt, get_non_zeros, chem1_g, &
+                      cp, cpor, n_dyn_chem, p00, PhotojMethod, split_method)
+  use netcdf
+  implicit none
+
+  integer, intent(in) :: processor 
+  integer, intent(in) :: m1, m2, m3
+  integer, intent(in) :: nspecies, nr, nr_photo, maxnspecies
+  integer, intent(in) :: nspecies_chem_transported, nspecies_chem_no_transported
+  integer, intent(in) :: nob, maxblock_size, na_extra3d, n_dyn_chem
+
+  integer, intent(in) :: block_end(nob)
+  integer, intent(in) :: indexk(maxblock_size,nob)
+  integer, intent(in) :: indexi(maxblock_size,nob)
+  integer, intent(in) :: indexj(maxblock_size,nob)
+  integer, intent(in) :: kij_index(maxblock_size,nob)
+  integer, intent(in) :: transp_chem_index(maxnspecies)
+  integer, intent(in) :: no_transp_chem_index(maxnspecies)
+
+  real, intent(in)    :: time
+  real, intent(in) :: dtlt
+  real, intent(in) :: cp, cpor, p00
+  real, intent(in) :: pp    (m1,m2,m3)
+  real, intent(in) :: pi0   (m1,m2,m3)
+  real, intent(in) :: theta (m1,m2,m3)
+  real, intent(in) :: rv    (m1,m2,m3)
+  real, intent(in) :: dn0   (m1,m2,m3)
+  real, intent(in) :: rcp   (m1,m2,m3)
+  real, intent(in) :: cosz  (m2,m3)
+  real, intent(in) :: weight(nspecies)
+  real, intent(in) :: att(m2, m3)
+
+  double precision, intent(in) :: last_accepted_dt(:)
+  double precision, intent(in) :: atol(nspecies)
+  double precision, intent(in) :: rtol(nspecies)
+  double precision, intent(in) :: jphoto(nr_photo,m1,m2,m3)
+
+  logical , intent(inout) :: get_non_zeros
+  character(len=10), intent(in) :: PhotojMethod
+  character(len=20), intent(in) :: split_method
+
+  type (chem1_vars), intent(inout) :: chem1_g(nspecies)
+  type(ext3d), intent(inout) :: extra3d(na_extra3d)
+  type(spack_type)   , intent(inout) :: spack(1)
+  type(spack_type_2d), intent(inout) :: spack_2d(:,:)
+
+  character(len=64) :: fileName
+  integer :: ispc, i, ii, ijk, n, ntpts
+  integer :: chem1_sc_t_sizes(nspecies), chem1_sc_t_dyn_sizes(nspecies)
+
+! Local NetCDF Variables
+  integer :: ncid, status
+  integer :: d_m1, d_m2, d_m3, d_nspc, d_ntpts, d_nrphoto, d_nr, d_maxspc, d_nob, d_mbsz, d_strlen, d_na_extra3d
+ 
+  integer :: v_block_end, v_indexk, v_indexi, v_indexj
+  integer :: v_kij_index, v_transp_chem_index, v_no_transp_chem_index
+
+  integer :: v_pp, v_pi0, v_theta, v_rv, v_dn0, v_rcp, v_cosz, v_att,v_weight
+  integer :: v_atol, v_rtol, v_last_accepted_dt, v_jphoto
+  integer :: v_glat, v_glon, v_spc_name
+  integer :: v_sc_p, v_sc_t, v_sc_t_dyn
+     
+  integer :: v_spack_DLdrdc, v_spack_jphoto, v_spack_rk, v_spack_w, v_spack_sc_p, v_spack_sc_p_new, v_spack_DLr
+  integer :: v_spack_temp, v_spack_press, v_spack_cosz, v_spack_att, v_spack_vapp, v_spack_volmol, v_spack_volmol_i, v_spack_xlw, v_spack_err
+  integer :: v_spack_2d_DLmat, v_spack_2d_DLb1, v_spack_2d_DLb2, v_spack_2d_DLk1, v_spack_2d_DLk2, v_spack_2d_DLb3, v_spack_2d_DLb4, v_spack_2d_DLk3, v_spack_2d_DLk4
+  integer :: v_extra3d_d3
+
+  ! Save each species size to put the information as an attribute
+  do ispc=1,nspecies
+    chem1_sc_t_sizes(ispc) = size(chem1_g(ispc)%sc_t)
+    chem1_sc_t_dyn_sizes(ispc) = size(chem1_g(ispc)%sc_t_dyn)
+  end do
+
+  !for chem1 sc_t max? size
+  ntpts = m1*m2*m3
+
+  write(filename, fmt='("chem_ia/chem_inp_",I6.6,"-",I4.4,".nc4")') INT(time), processor
+  print *, "Writing NetCDF Input: ", TRIM(filename)
+
+  status = NF90_CREATE(filename, IOR(NF90_NETCDF4, NF90_CLOBBER), ncid)
+  CHECK_NF90(status)
+
+  ! Global Attributes (Scalars)
+  status = NF90_PUT_ATT(ncid, NF90_GLOBAL, 'processor', processor)
+  CHECK_NF90(status)
+  status = NF90_PUT_ATT(ncid, NF90_GLOBAL, 'time', int(time))
+  CHECK_NF90(status)
+  status = NF90_PUT_ATT(ncid, NF90_GLOBAL, 'dtlt', dtlt)
+  CHECK_NF90(status)
+  status = NF90_PUT_ATT(ncid, NF90_GLOBAL, 'nspecies_chem_transported', nspecies_chem_transported)
+  CHECK_NF90(status)
+  status = NF90_PUT_ATT(ncid, NF90_GLOBAL, 'nspecies_chem_no_transported', nspecies_chem_no_transported)
+  CHECK_NF90(status)
+  status = NF90_PUT_ATT(ncid, NF90_GLOBAL, 'n_dyn_chem', n_dyn_chem)
+  CHECK_NF90(status)
+  status = NF90_PUT_ATT(ncid, NF90_GLOBAL, 'cp', cp)
+  CHECK_NF90(status)
+  status = NF90_PUT_ATT(ncid, NF90_GLOBAL, 'cpor', cpor)
+  CHECK_NF90(status)
+  status = NF90_PUT_ATT(ncid, NF90_GLOBAL, 'p00', p00)
+  CHECK_NF90(status)
+  status = NF90_PUT_ATT(ncid, NF90_GLOBAL, 'get_non_zeros', INT(MERGE(1, 0, get_non_zeros)))
+  CHECK_NF90(status)
+  status = NF90_PUT_ATT(ncid, NF90_GLOBAL, 'PhotojMethod', TRIM(PhotojMethod))
+  CHECK_NF90(status)
+  status = NF90_PUT_ATT(ncid, NF90_GLOBAL, 'split_method', TRIM(split_method))
+  CHECK_NF90(status)
+
+  ! Define Dimensions
+  status = NF90_DEF_DIM(ncid, 'level', m1, d_m1)
+  CHECK_NF90(status)
+  status = NF90_DEF_DIM(ncid, 'latitude', m2, d_m2)
+  CHECK_NF90(status)
+  status = NF90_DEF_DIM(ncid, 'longitude', m3, d_m3)
+  CHECK_NF90(status)
+  status = NF90_DEF_DIM(ncid, 'nspecies', nspecies, d_nspc)
+  CHECK_NF90(status)
+  status = NF90_DEF_DIM(ncid, 'ntpts', ntpts, d_ntpts)
+  CHECK_NF90(status)
+  status = NF90_DEF_DIM(ncid, 'nr_photo', nr_photo, d_nrphoto)
+  CHECK_NF90(status)
+  status = NF90_DEF_DIM(ncid, 'nr', nr, d_nr)
+  CHECK_NF90(status)
+  status = NF90_DEF_DIM(ncid, 'maxnspecies', maxnspecies, d_maxspc)
+  CHECK_NF90(status)
+  status = NF90_DEF_DIM(ncid, 'nob', nob, d_nob)
+  CHECK_NF90(status)
+  status = NF90_DEF_DIM(ncid, 'maxblock_size', maxblock_size, d_mbsz)
+  CHECK_NF90(status)
+  status = NF90_DEF_DIM(ncid, 'strlen', 16, d_strlen)
+  CHECK_NF90(status)
+  ! status = NF90_DEF_DIM(ncid, 'na_extra3d', na_extra3d, d_na_extra3d)
+  !CHECK_NF90(status)
+
+  ! Define variables
+  status = NF90_DEF_VAR(ncid, 'latitude', NF90_FLOAT, d_m2, v_glat)
+  CHECK_NF90(status)
+  status = NF90_PUT_ATT(ncid, v_glat, 'units', 'degrees_north')
+  CHECK_NF90(status)
+  status = NF90_DEF_VAR(ncid, 'longitude', NF90_FLOAT,  d_m3, v_glon)
+  CHECK_NF90(status)
+  status = NF90_PUT_ATT(ncid, v_glon, 'units', 'degrees_east')
+  CHECK_NF90(status)
+    
+  status = NF90_DEF_VAR(ncid, 'block_end', NF90_INT, [ d_nob ], v_block_end, shuffle=shuffle,deflate_level=1)
+  CHECK_NF90(status)
+  status = NF90_DEF_VAR(ncid, 'indexk', NF90_INT, [ d_mbsz, d_nob ], v_indexk, shuffle=shuffle,deflate_level=1)
+  CHECK_NF90(status)
+  status = NF90_DEF_VAR(ncid, 'indexi', NF90_INT, [ d_mbsz, d_nob ], v_indexi, shuffle=shuffle,deflate_level=1)
+  CHECK_NF90(status)
+  status = NF90_DEF_VAR(ncid, 'indexj', NF90_INT, [ d_mbsz, d_nob ], v_indexj, shuffle=shuffle,deflate_level=1)
+  CHECK_NF90(status)
+  status = NF90_DEF_VAR(ncid, 'kij_index', NF90_INT, [ d_mbsz, d_nob ], v_kij_index, shuffle=shuffle,deflate_level=1)
+  CHECK_NF90(status)
+  status = NF90_DEF_VAR(ncid, 'transp_chem_index', NF90_INT, [ d_maxspc ], v_transp_chem_index, shuffle=shuffle,deflate_level=1)
+  CHECK_NF90(status)
+  status = NF90_DEF_VAR(ncid, 'no_transp_chem_index', NF90_INT, [ d_maxspc ], v_no_transp_chem_index, shuffle=shuffle,deflate_level=1)
+  CHECK_NF90(status)
+
+  status = NF90_DEF_VAR(ncid, 'pp', NF90_FLOAT, [d_m1, d_m2, d_m3], v_pp, shuffle=shuffle,deflate_level=1)
+  CHECK_NF90(status)
+  status = NF90_DEF_VAR(ncid, 'pi0', NF90_FLOAT, [d_m1, d_m2, d_m3], v_pi0, shuffle=shuffle,deflate_level=1)
+  CHECK_NF90(status)
+  status = NF90_DEF_VAR(ncid, 'theta', NF90_FLOAT, [d_m1, d_m2, d_m3], v_theta, shuffle=shuffle,deflate_level=1)
+  CHECK_NF90(status)
+  status = NF90_DEF_VAR(ncid, 'rv', NF90_FLOAT, [d_m1, d_m2, d_m3], v_rv, shuffle=shuffle,deflate_level=1)
+  CHECK_NF90(status)
+  status = NF90_DEF_VAR(ncid, 'dn0', NF90_FLOAT, [d_m1, d_m2, d_m3], v_dn0, shuffle=shuffle,deflate_level=1)
+  CHECK_NF90(status)
+  status = NF90_DEF_VAR(ncid, 'rcp', NF90_FLOAT, [d_m1, d_m2, d_m3], v_rcp, shuffle=shuffle,deflate_level=1)
+  CHECK_NF90(status)
+  status = NF90_DEF_VAR(ncid, 'cosz', NF90_FLOAT, [d_m1, d_m2, d_m3], v_cosz, shuffle=shuffle,deflate_level=1)
+  CHECK_NF90(status)
+  status = NF90_DEF_VAR(ncid, 'weight', NF90_FLOAT, d_nspc, v_weight, shuffle=shuffle,deflate_level=1)
+  CHECK_NF90(status)
+  status = NF90_DEF_VAR(ncid, 'att', NF90_FLOAT, [d_m2, d_m3], v_att, shuffle=shuffle,deflate_level=1)
+  CHECK_NF90(status)
+  
+  status = NF90_DEF_VAR(ncid, 'last_accepted_dt', NF90_DOUBLE, d_nob, v_last_accepted_dt, shuffle=shuffle,deflate_level=1)
+  CHECK_NF90(status)
+  status = NF90_DEF_VAR(ncid, 'atol', NF90_DOUBLE, d_nspc, v_atol, shuffle=shuffle,deflate_level=1)
+  CHECK_NF90(status)
+  status = NF90_DEF_VAR(ncid, 'rtol', NF90_DOUBLE, d_nspc, v_rtol, shuffle=shuffle,deflate_level=1)
+  CHECK_NF90(status)
+  status = NF90_DEF_VAR(ncid, 'jphoto', NF90_DOUBLE, [d_nrphoto, d_m1, d_m2, d_m3], v_jphoto, shuffle=shuffle,deflate_level=1)
+  CHECK_NF90(status)
+
+  ! Define Species Names Variable
+  status = NF90_DEF_VAR(ncid, 'species_names', NF90_CHAR, [d_strlen, d_nspc], v_spc_name)
+  CHECK_NF90(status)
+
+  ! Define chem1 variables
+  status = NF90_DEF_VAR(ncid, 'concentration', NF90_FLOAT, [d_m1, d_m2, d_m3, d_nspc], v_sc_p, shuffle=shuffle,deflate_level=1)
+  CHECK_NF90(status)
+  status = NF90_DEF_VAR(ncid, 'tendency', NF90_FLOAT, [d_ntpts, d_nspc], v_sc_t, shuffle=shuffle, deflate_level=1)   
+  CHECK_NF90(status)
+  status = NF90_PUT_ATT(ncid, v_sc_t, 'species_sizes', chem1_sc_t_sizes)
+  CHECK_NF90(status)
+ 
+  !if (trim(adjustl(SPLIT_METHOD))=='PARALLEL') sc_t_dyn shape = (1), else ntpts
+  status = NF90_DEF_VAR(ncid, 'dynamics', NF90_FLOAT, [d_nspc], v_sc_t_dyn, shuffle=shuffle, deflate_level=1)
+  CHECK_NF90(status)
+  status = NF90_PUT_ATT(ncid, v_sc_t_dyn, 'species_sizes', chem1_sc_t_dyn_sizes)
+  CHECK_NF90(status)
+
+  ! Define spack variables ! if nob>1, must add d_nob dimension
+  status = NF90_DEF_VAR(ncid, 'spack_DLdrdc', NF90_DOUBLE, [d_mbsz, d_nspc, d_nspc], v_spack_DLdrdc, shuffle=shuffle, deflate_level=1)
+  CHECK_NF90(status)
+  status = NF90_DEF_VAR(ncid, 'spack_jphoto', NF90_DOUBLE, [d_mbsz, d_nrphoto], v_spack_jphoto, shuffle=shuffle, deflate_level=1)
+  CHECK_NF90(status)
+  status = NF90_DEF_VAR(ncid, 'spack_rk', NF90_DOUBLE, [d_mbsz, d_nr], v_spack_rk, shuffle=shuffle, deflate_level=1)
+  CHECK_NF90(status)
+  status = NF90_DEF_VAR(ncid, 'spack_w', NF90_DOUBLE, [d_mbsz, d_nr], v_spack_w, shuffle=shuffle, deflate_level=1)
+  CHECK_NF90(status)
+  status = NF90_DEF_VAR(ncid, 'spack_sc_p', NF90_DOUBLE, [d_mbsz, d_nspc], v_spack_sc_p, shuffle=shuffle, deflate_level=1)
+  CHECK_NF90(status)
+  status = NF90_DEF_VAR(ncid, 'spack_sc_p_new', NF90_DOUBLE, [d_mbsz, d_nspc], v_spack_sc_p_new, shuffle=shuffle, deflate_level=1)
+  CHECK_NF90(status)
+  status = NF90_DEF_VAR(ncid, 'spack_DLr', NF90_DOUBLE, [d_mbsz, d_nspc], v_spack_DLr, shuffle=shuffle, deflate_level=1)
+  CHECK_NF90(status)
+  status = NF90_DEF_VAR(ncid, 'spack_temp', NF90_DOUBLE, [d_mbsz], v_spack_temp, shuffle=shuffle, deflate_level=1)
+  CHECK_NF90(status)
+  status = NF90_DEF_VAR(ncid, 'spack_press', NF90_DOUBLE, [d_mbsz], v_spack_press, shuffle=shuffle, deflate_level=1)
+  CHECK_NF90(status)
+  status = NF90_DEF_VAR(ncid, 'spack_cosz', NF90_DOUBLE, [d_mbsz], v_spack_cosz, shuffle=shuffle, deflate_level=1)
+  CHECK_NF90(status)
+  status = NF90_DEF_VAR(ncid, 'spack_att', NF90_DOUBLE, [d_mbsz], v_spack_att, shuffle=shuffle, deflate_level=1)
+  CHECK_NF90(status)
+  status = NF90_DEF_VAR(ncid, 'spack_vapp', NF90_DOUBLE, [d_mbsz], v_spack_vapp, shuffle=shuffle, deflate_level=1)
+  CHECK_NF90(status)
+  status = NF90_DEF_VAR(ncid, 'spack_volmol', NF90_DOUBLE, [d_mbsz], v_spack_volmol, shuffle=shuffle, deflate_level=1)
+  CHECK_NF90(status)
+  status = NF90_DEF_VAR(ncid, 'spack_volmol_i', NF90_DOUBLE, [d_mbsz], v_spack_volmol_i, shuffle=shuffle, deflate_level=1)
+  CHECK_NF90(status)
+  status = NF90_DEF_VAR(ncid, 'spack_xlw', NF90_DOUBLE, [d_mbsz], v_spack_xlw, shuffle=shuffle, deflate_level=1)
+  CHECK_NF90(status)
+  status = NF90_DEF_VAR(ncid, 'spack_err', NF90_DOUBLE, [d_mbsz], v_spack_err, shuffle=shuffle, deflate_level=1)
+  CHECK_NF90(status)
+
+  ! Define spack_2d variables ! if nob>1, must add d_nob dimension
+  status = NF90_DEF_VAR(ncid, 'spack_2d_DLmat', NF90_DOUBLE, [d_mbsz, d_nspc, d_nspc], v_spack_2d_DLmat, shuffle=shuffle, deflate_level=1)
+  CHECK_NF90(status)
+  status = NF90_DEF_VAR(ncid, 'spack_2d_DLb1', NF90_DOUBLE, [d_mbsz, d_nspc], v_spack_2d_DLb1, shuffle=shuffle, deflate_level=1)
+  CHECK_NF90(status)
+  status = NF90_DEF_VAR(ncid, 'spack_2d_DLb2', NF90_DOUBLE, [d_mbsz, d_nspc], v_spack_2d_DLb2, shuffle=shuffle, deflate_level=1)
+  CHECK_NF90(status)
+  status = NF90_DEF_VAR(ncid, 'spack_2d_DLk1', NF90_DOUBLE, [d_mbsz, d_nspc], v_spack_2d_DLk1, shuffle=shuffle, deflate_level=1)
+  CHECK_NF90(status)
+  status = NF90_DEF_VAR(ncid, 'spack_2d_DLk2', NF90_DOUBLE, [d_mbsz, d_nspc], v_spack_2d_DLk2, shuffle=shuffle, deflate_level=1)
+  CHECK_NF90(status)
+  status = NF90_DEF_VAR(ncid, 'spack_2d_DLb3', NF90_DOUBLE, [d_mbsz, d_nspc], v_spack_2d_DLb3, shuffle=shuffle, deflate_level=1)
+  CHECK_NF90(status)
+  status = NF90_DEF_VAR(ncid, 'spack_2d_DLb4', NF90_DOUBLE, [d_mbsz, d_nspc], v_spack_2d_DLb4, shuffle=shuffle, deflate_level=1)
+  CHECK_NF90(status)
+  status = NF90_DEF_VAR(ncid, 'spack_2d_DLk3', NF90_DOUBLE, [d_mbsz, d_nspc], v_spack_2d_DLk3, shuffle=shuffle, deflate_level=1)
+  CHECK_NF90(status)
+  status = NF90_DEF_VAR(ncid, 'spack_2d_DLk4', NF90_DOUBLE, [d_mbsz, d_nspc], v_spack_2d_DLk4, shuffle=shuffle, deflate_level=1)
+  CHECK_NF90(status)
+
+  ! use d_na_extra3d dim if more than one
+  status = NF90_DEF_VAR(ncid, 'extra3d_d3', NF90_FLOAT, [d_m1, d_m2, d_m3], v_extra3d_d3, shuffle=shuffle, deflate_level=1)
+  CHECK_NF90(status)
+
+  status = NF90_ENDDEF(ncid)
+  CHECK_NF90(status)
+
+  ! Write variables to netcdf 
+  status = NF90_PUT_VAR(ncid, v_block_end, block_end)
+  CHECK_NF90(status)
+
+  status = NF90_PUT_VAR(ncid, v_indexk, indexk)
+  CHECK_NF90(status)
+
+  status = NF90_PUT_VAR(ncid, v_indexi, indexi)
+  CHECK_NF90(status)
+
+  status = NF90_PUT_VAR(ncid, v_indexj, indexj)
+  CHECK_NF90(status)
+
+  status = NF90_PUT_VAR(ncid, v_kij_index, kij_index)
+  CHECK_NF90(status)
+
+  status = NF90_PUT_VAR(ncid, v_transp_chem_index, transp_chem_index)
+  CHECK_NF90(status)
+
+  status = NF90_PUT_VAR(ncid, v_no_transp_chem_index, no_transp_chem_index)
+  CHECK_NF90(status)
+
+  status = NF90_PUT_VAR(ncid, v_pp, pp)
+  CHECK_NF90(status)
+  status = NF90_PUT_VAR(ncid, v_pi0, pi0)
+  CHECK_NF90(status)
+  status = NF90_PUT_VAR(ncid, v_theta, theta)
+  CHECK_NF90(status)
+  status = NF90_PUT_VAR(ncid, v_rv, rv)
+  CHECK_NF90(status)
+  status = NF90_PUT_VAR(ncid, v_dn0, dn0)
+  CHECK_NF90(status)
+  status = NF90_PUT_VAR(ncid, v_rcp, rcp)
+  CHECK_NF90(status)
+  status = NF90_PUT_VAR(ncid, v_cosz, cosz)
+  CHECK_NF90(status)
+  status = NF90_PUT_VAR(ncid, v_weight, weight)
+  CHECK_NF90(status)
+  status = NF90_PUT_VAR(ncid, v_att, att)
+  CHECK_NF90(status)
+  status = NF90_PUT_VAR(ncid, v_last_accepted_dt, last_accepted_dt)
+  CHECK_NF90(status)
+  status = NF90_PUT_VAR(ncid, v_atol, atol)
+  CHECK_NF90(status)
+  status = NF90_PUT_VAR(ncid, v_rtol, rtol)
+  CHECK_NF90(status)
+  status = NF90_PUT_VAR(ncid, v_jphoto, jphoto)
+  CHECK_NF90(status)
+
+  ! Write grid data
+  status = NF90_PUT_VAR(ncid, v_glat, grid_g(1)%glat(:,1))
+  CHECK_NF90(status)
+  status = NF90_PUT_VAR(ncid, v_glon, grid_g(1)%glon(1,:))
+  CHECK_NF90(status)
+
+  ! Write species names
+  do ispc = 1, nspecies
+    ii = MAX(1, LEN_TRIM(spc_name(ispc)))
+    status = NF90_PUT_VAR(ncid, v_spc_name, TRIM(spc_name(ispc)), start=[1, ispc], count=[ii, 1])
+    CHECK_NF90(status)
+  end do
+
+  ! Write species data
+  do ispc = 1, nspecies
+
+    status = NF90_PUT_VAR(ncid, v_sc_p, chem1_g(ispc)%sc_p, start=[1,1,1,ispc], count=[m1,m2,m3,1])
+    CHECK_NF90(status)
+
+    status = NF90_PUT_VAR(ncid, v_sc_t, chem1_g(ispc)%sc_t, start=[1,ispc], count=[chem1_sc_t_sizes(ispc),1])
+    CHECK_NF90(status)
+      
+    status = NF90_PUT_VAR(ncid, v_sc_t_dyn, chem1_g(ispc)%sc_t_dyn, start=[ispc], count=[chem1_sc_t_dyn_sizes(ispc)])
+    CHECK_NF90(status)
+      
+ end do
+ 
+  ! Write spack data
+  status = NF90_PUT_VAR(ncid, v_spack_DLdrdc, spack(1)%DLdrdc)
+  CHECK_NF90(status)
+
+  status = NF90_PUT_VAR(ncid, v_spack_jphoto, spack(1)%jphoto)
+  CHECK_NF90(status)
+
+  status = NF90_PUT_VAR(ncid, v_spack_rk, spack(1)%rk)
+  CHECK_NF90(status)
+
+  status = NF90_PUT_VAR(ncid, v_spack_w, spack(1)%w)
+  CHECK_NF90(status)
+
+  status = NF90_PUT_VAR(ncid, v_spack_sc_p, spack(1)%sc_p)
+  CHECK_NF90(status)
+
+  status = NF90_PUT_VAR(ncid, v_spack_sc_p_new, spack(1)%sc_p_new)
+  CHECK_NF90(status)
+
+  status = NF90_PUT_VAR(ncid, v_spack_DLr, spack(1)%DLr)
+  CHECK_NF90(status)
+
+  status = NF90_PUT_VAR(ncid, v_spack_temp, spack(1)%temp)
+  CHECK_NF90(status)
+
+  status = NF90_PUT_VAR(ncid, v_spack_press, spack(1)%press)
+  CHECK_NF90(status)
+
+  status = NF90_PUT_VAR(ncid, v_spack_cosz, spack(1)%cosz)
+  CHECK_NF90(status)
+
+  status = NF90_PUT_VAR(ncid, v_spack_att, spack(1)%att)
+  CHECK_NF90(status)
+
+  status = NF90_PUT_VAR(ncid, v_spack_vapp, spack(1)%vapp)
+  CHECK_NF90(status)
+
+  status = NF90_PUT_VAR(ncid, v_spack_volmol, spack(1)%volmol)
+  CHECK_NF90(status)
+
+  status = NF90_PUT_VAR(ncid, v_spack_volmol_i, spack(1)%volmol_i)
+  CHECK_NF90(status)
+
+  status = NF90_PUT_VAR(ncid, v_spack_xlw, spack(1)%xlw)
+  CHECK_NF90(status)
+
+  status = NF90_PUT_VAR(ncid, v_spack_err, spack(1)%err)
+  CHECK_NF90(status)
+
+  ! Write spack_2d data
+  do ijk = 1, maxblock_size
+      status = NF90_PUT_VAR(ncid, v_spack_2d_DLmat, spack_2d(ijk,1)%DLmat, [ijk, 1, 1], [1, nspecies, nspecies])
+      CHECK_NF90(status)
+
+      status = NF90_PUT_VAR(ncid, v_spack_2d_DLb1, spack_2d(ijk,1)%DLb1, [ijk, 1], [1, nspecies])
+      CHECK_NF90(status)
+
+      status = NF90_PUT_VAR(ncid, v_spack_2d_DLb2, spack_2d(ijk,1)%DLb2, [ijk, 1], [1, nspecies])
+      CHECK_NF90(status)
+
+      status = NF90_PUT_VAR(ncid, v_spack_2d_DLk1, spack_2d(ijk,1)%DLk1, [ijk, 1], [1, nspecies])
+      CHECK_NF90(status)
+
+      status = NF90_PUT_VAR(ncid, v_spack_2d_DLk2, spack_2d(ijk,1)%DLk2, [ijk, 1], [1, nspecies])
+      CHECK_NF90(status)
+
+      status = NF90_PUT_VAR(ncid, v_spack_2d_DLb3, spack_2d(ijk,1)%DLb3, [ijk, 1], [1, nspecies])
+      CHECK_NF90(status)
+
+      status = NF90_PUT_VAR(ncid, v_spack_2d_DLb4, spack_2d(ijk,1)%DLb4, [ijk, 1], [1, nspecies])
+      CHECK_NF90(status)
+
+      status = NF90_PUT_VAR(ncid, v_spack_2d_DLk3, spack_2d(ijk,1)%DLk3, [ijk, 1], [1, nspecies])
+      CHECK_NF90(status)
+
+      status = NF90_PUT_VAR(ncid, v_spack_2d_DLk4, spack_2d(ijk,1)%DLk4, [ijk, 1], [1, nspecies])
+      CHECK_NF90(status)
+  end do
+  
+  if (na_extra3d >= 1) then
+    status = NF90_PUT_VAR(ncid, v_extra3d_d3, extra3d(1)%d3)
+    CHECK_NF90(status)
+  end if
+  status = NF90_CLOSE(ncid)
+  CHECK_NF90(status)
+
+end subroutine write_input
 
 subroutine write_output(time, m1, m2, m3, processor, chem1_g, nspecies)
     
         integer, intent(in) :: processor, m1,m2,m3
         integer, intent(in) :: nspecies !, nob, maxblock_size, na_extra3d
-        !integer, intent(in) :: block_end(nob)
-
         real, intent(in)    :: time
 
-        !double precision, intent(in) :: last_accepted_dt(:)
-
-        !logical , intent(inout) :: get_non_zeros
-
         type (chem1_vars), intent(inout) :: chem1_g(nspecies)
-        !type(ext3d), intent(inout) :: extra3d(na_extra3d)
-        !type(spack_type)   , intent(inout) :: spack(1)
-        !type(spack_type_2d), intent(inout) :: spack_2d(:,:)
 
         integer :: iunit, ispc, i, ijk
         character(len=64) :: fileName
@@ -1028,45 +1474,8 @@ subroutine write_output(time, m1, m2, m3, processor, chem1_g, nspecies)
         end do
 
         write(iunit) spc_name
-!        write(iunit)  spack(1)%DLdrdc
-!        write(iunit)  spack(1)%sc_p_new
-!        !write(iunit,*)  spack(1)%sc_p_4
-!        write(iunit)  spack(1)%DLr	 
-!        !write(iunit,*)  spack(1)%DLr3	  
-!        write(iunit)  spack(1)%jphoto 
-!        write(iunit)  spack(1)%rk    
-!        write(iunit)  spack(1)%w    
-!        write(iunit)  spack(1)%sc_p
-!        write(iunit)  spack(1)%temp	
-!        write(iunit)  spack(1)%press 
-!        write(iunit)  spack(1)%cosz	  
-!        write(iunit)  spack(1)%att	  
-!        write(iunit)  spack(1)%vapp 
-!        write(iunit)  spack(1)%volmol 
-!        write(iunit)  spack(1)%volmol_i 
-!        write(iunit)  spack(1)%xlw 
-!        write(iunit)  spack(1)%err    
-!        do i = 1, nob
-!          do ijk = 1, block_end(i)
-!            write(iunit)  spack_2d(ijk,inob)%DLmat 
-!            write(iunit)  spack_2d(ijk,inob)%DLb1	
-!            write(iunit)  spack_2d(ijk,inob)%DLb2	
-!            write(iunit)  spack_2d(ijk,inob)%DLb3	
-!            write(iunit)  spack_2d(ijk,inob)%DLb4	
-!            write(iunit)  spack_2d(ijk,inob)%DLk1  
-!            write(iunit)  spack_2d(ijk,inob)%DLk2  
-!            write(iunit)  spack_2d(ijk,inob)%DLk3  
-!            write(iunit)  spack_2d(ijk,inob)%DLk4 
-!          end do
-!        end do 
-!        write(iunit)  last_accepted_dt !(:) !IO !(nob)
-!        write(iunit)  get_non_zeros !IO
-!        do i=1,na_extra3d
-!          write(iunit)  extra3d(i)%d3 !(na_extra3d) ! Output JNO2 !IO
-!        end do
-
         close(iunit)
-      end if
+        end if
         call create_netcdf_file(time, processor, m1, m2, m3, nspecies, chem1_g)
 
 end subroutine write_output
@@ -1081,101 +1490,105 @@ subroutine create_netcdf_file(time, processor, m1, m2, m3, nspecies, chem1_g)
   type(chem1_vars), intent(inout) :: chem1_g(nspecies)
 
   integer :: ncid, status
-  integer :: dim_m1, dim_m2, dim_m3, dim_nspecies, dim_strlen
+  integer :: dim_m1, dim_m2, dim_m3, dim_nspecies, dim_ntpts, dim_strlen
   integer :: var_m1, var_m2, var_m3, var_nspecies
   integer :: var_glat, var_glon, var_spc_name
   integer :: var_scp, var_sct, var_sctdyn
-  integer :: i, n, str_len
+  integer :: i, n, str_len, ntpts, ispc
+  integer :: chem1_sc_t_sizes(nspecies), chem1_sc_t_dyn_sizes(nspecies)
+
   character(len=64) :: filename
+
+   !for chem1 sc_t max? size
+  ntpts = m1*m2*m3
+
+  ! Save each species size to put the information as an attribute
+  do ispc=1,nspecies
+    chem1_sc_t_sizes(ispc) = size(chem1_g(ispc)%sc_t)
+    chem1_sc_t_dyn_sizes(ispc) = size(chem1_g(ispc)%sc_t_dyn)
+  end do
 
   ! Create filename
   write(filename, fmt='("chem_ia/chem_out_",I6.6,"-",I4.4,".nc4")') int(time), processor
 
   status = NF90_CREATE(TRIM(filename), OR(NF90_NETCDF4, NF90_CLOBBER), ncid)
-  if (status /= NF90_NOERR) CALL handle_error(status, "Create File")
+  CHECK_NF90(status)
+
+  status = NF90_PUT_ATT(ncid, NF90_GLOBAL, 'processor', processor)
+  CHECK_NF90(status)
+  status = NF90_PUT_ATT(ncid, NF90_GLOBAL, 'time', int(time))
+  CHECK_NF90(status)
 
   ! Define dimensions
   status = NF90_DEF_DIM(ncid, 'level', m1, dim_m1)
-  if (status /= NF90_NOERR) CALL handle_error(status, "def level")
+  CHECK_NF90(status)
   status = NF90_DEF_DIM(ncid, 'latitude', m2, dim_m2)
-  if (status /= NF90_NOERR) CALL handle_error(status, "def lat")
+  CHECK_NF90(status)
   status = NF90_DEF_DIM(ncid, 'longitude', m3, dim_m3)
-  if (status /= NF90_NOERR) CALL handle_error(status, "def lon")
+  CHECK_NF90(status)
   status = NF90_DEF_DIM(ncid, 'nspecies', nspecies, dim_nspecies)
-  if (status /= NF90_NOERR) CALL handle_error(status, "def nspecies")
+  CHECK_NF90(status)
   status = NF90_DEF_DIM(ncid, 'strlen', 64, dim_strlen)
-  if (status /= NF90_NOERR) CALL handle_error(status, "def strlen")
+  CHECK_NF90(status)
+  status = NF90_DEF_DIM(ncid, 'ntpts', ntpts, dim_ntpts)
 
   ! Define Coordinates
   status = NF90_DEF_VAR(ncid, 'latitude', NF90_FLOAT, dim_m2, var_glat)
-  if (status /= NF90_NOERR) CALL handle_error(status, "")
+  CHECK_NF90(status)
   status = NF90_PUT_ATT(ncid, var_glat, 'units', 'degrees_north')
-  if (status /= NF90_NOERR) CALL handle_error(status, "")
+  CHECK_NF90(status)
 
   status = NF90_DEF_VAR(ncid, 'longitude', NF90_FLOAT,  dim_m3, var_glon)
-  if (status /= NF90_NOERR) CALL handle_error(status, "")
+  CHECK_NF90(status)
   status = NF90_PUT_ATT(ncid, var_glon, 'units', 'degrees_east')
-  if (status /= NF90_NOERR) CALL handle_error(status, "")
+  CHECK_NF90(status)
 
   ! Define Species Names Variable
-  status = NF90_DEF_VAR(ncid, 'species_names', NF90_CHAR, (/dim_strlen, dim_nspecies/), var_spc_name)
-  if (status /= NF90_NOERR) CALL handle_error(status, "")
+  status = NF90_DEF_VAR(ncid, 'species_names', NF90_CHAR, [dim_strlen, dim_nspecies], var_spc_name)
+  CHECK_NF90(status)
 
-  ! Define Main Variables WITH DEFLATE AND SHUFFLE
-  status = NF90_DEF_VAR(ncid, 'concentration', NF90_FLOAT, (/dim_m1, dim_m2, dim_m3, dim_nspecies/), var_scp)
-  if (status /= NF90_NOERR) CALL handle_error(status, "")
-  status = NF90_DEF_VAR_DEFLATE(ncid, var_scp, shuffle=1, deflate=1, deflate_level=1)
-  if (status /= NF90_NOERR) CALL handle_error(status, "")
+  ! Define Main Variables 
+  status = NF90_DEF_VAR(ncid, 'concentration', NF90_FLOAT, [dim_m1, dim_m2, dim_m3, dim_nspecies], var_scp, shuffle=shuffle, deflate_level=1)
+  CHECK_NF90(status)
 
-  status = NF90_DEF_VAR(ncid, 'tendency', NF90_FLOAT, (/dim_m1, dim_m2, dim_m3, dim_nspecies/), var_sct)
-  if (status /= NF90_NOERR) CALL handle_error(status, "")
-  status = NF90_DEF_VAR_DEFLATE(ncid, var_sct, shuffle=1, deflate=1, deflate_level=1)
-  if (status /= NF90_NOERR) CALL handle_error(status, "")
+  status = NF90_DEF_VAR(ncid, 'tendency', NF90_FLOAT, [dim_ntpts, dim_nspecies], var_sct, shuffle=shuffle, deflate_level=1)
+  CHECK_NF90(status)
+  status = NF90_PUT_ATT(ncid, var_sct, 'species_sizes', chem1_sc_t_sizes)
 
-  status = NF90_DEF_VAR(ncid, 'dynamics', NF90_FLOAT, (/dim_m1, dim_m2, dim_m3, dim_nspecies/), var_sctdyn)
-  if (status /= NF90_NOERR) CALL handle_error(status, "")
-  status = NF90_DEF_VAR_DEFLATE(ncid, var_sctdyn, shuffle=1, deflate=1, deflate_level=1)
-  if (status /= NF90_NOERR) CALL handle_error(status, "")
+  status = NF90_DEF_VAR(ncid, 'dynamics', NF90_FLOAT, [dim_nspecies], var_sctdyn, shuffle=shuffle, deflate_level=1)
+  CHECK_NF90(status)
+  status = NF90_PUT_ATT(ncid, var_sctdyn, 'species_sizes', chem1_sc_t_dyn_sizes)
 
   ! End Definitions
   status = NF90_ENDDEF(ncid)
-  if (status /= NF90_NOERR) CALL handle_error(status, "End Def")
+  CHECK_NF90(status)
 
   ! Write Grid Data
-  status = NF90_PUT_VAR(ncid, var_glat, grid_g(1)%glat(1,:),start=[1],count=[m2])
-  if (status /= NF90_NOERR) CALL handle_error(status, "put lat")
-  status = NF90_PUT_VAR(ncid, var_glon, grid_g(1)%glon(:,1),start=[1],count=[m3])
-  if (status /= NF90_NOERR) CALL handle_error(status, "put lon")
+  status = NF90_PUT_VAR(ncid, var_glat, grid_g(1)%glat(:,1),start=[1],count=[m2])
+  CHECK_NF90(status)
+  status = NF90_PUT_VAR(ncid, var_glon, grid_g(1)%glon(1,:),start=[1],count=[m3])
+  CHECK_NF90(status)
 
   ! Write Species Names
   DO n = 1, nspecies
     str_len = MAX(1, LEN_TRIM(spc_name(n)))
-    status = NF90_PUT_VAR(ncid, var_spc_name, TRIM(spc_name(n)), start=(/1, n/), count=(/str_len, 1/))
-  if (status /= NF90_NOERR) CALL handle_error(status, "put name")
+    status = NF90_PUT_VAR(ncid, var_spc_name, TRIM(spc_name(n)), start=[1, n], count=[str_len, 1])
+    CHECK_NF90(status)
   END DO
 
   ! Write 4D Species Data
   DO n = 1, nspecies
-    status = NF90_PUT_VAR(ncid, var_scp, chem1_g(n)%sc_p, start=(/1, 1, 1, n/), count=(/m1, m2, m3, 1/))
-  if (status /= NF90_NOERR) CALL handle_error(status, "put concentration")
-    status = NF90_PUT_VAR(ncid, var_sct, chem1_g(n)%sc_t, start=(/1, 1, 1, n/), count=(/m1, m2, m3, 1/))
-  if (status /= NF90_NOERR) CALL handle_error(status, "put tendency")
-    status = NF90_PUT_VAR(ncid, var_sctdyn, chem1_g(n)%sc_t_dyn, start=(/1, 1, 1, n/), count=(/m1, m2, m3, 1/))
-  if (status /= NF90_NOERR) CALL handle_error(status, "put dynamics")
+    status = NF90_PUT_VAR(ncid, var_scp, chem1_g(n)%sc_p, start=[1, 1, 1, n], count=[m1, m2, m3, 1])
+    CHECK_NF90(status)
+    status = NF90_PUT_VAR(ncid, var_sct, chem1_g(n)%sc_t, start=[1, n], count=[chem1_sc_t_sizes(n), 1])
+    CHECK_NF90(status)
+    status = NF90_PUT_VAR(ncid, var_sctdyn, chem1_g(n)%sc_t_dyn, start=[n], count=[1])
+    CHECK_NF90(status)
   END DO
 
   status = NF90_CLOSE(ncid)
-  if (status /= NF90_NOERR) CALL handle_error(status, "Close File")
+  CHECK_NF90(status)
 
-CONTAINS
-  subroutine handle_error(status, loc)
-    integer, intent(in) :: status
-    character(len=*), intent(in) :: loc
-    IF (status /= NF90_NOERR) THEN
-        PRINT *, 'Output NetCDF Error [', TRIM(loc), ']: ', TRIM(NF90_STRERROR(status))
-        STOP
-    END IF
-  END subroutine handle_error
 END subroutine create_netcdf_file
 
 !Creates a 20-33% larger netcdf file, but each species type is its own variable
@@ -1193,7 +1606,7 @@ subroutine create_netcdf_file_per_species(time, processor, m1, m2, m3, nspecies,
   
   ! Arrays to hold the variable IDs for each species
   integer, allocatable :: var_scp(:), var_sct(:), var_sctdyn(:)
-  integer :: i, n
+  integer :: i, n, ispc
   character(len=64) :: filename
   character(len=128) :: var_name
 
@@ -1201,26 +1614,26 @@ subroutine create_netcdf_file_per_species(time, processor, m1, m2, m3, nspecies,
   write(filename, fmt='("chem_ia/chem_out_",I6.6,"-",I4.4,".nc4")') int(time), processor
 
   status = NF90_CREATE(TRIM(filename), OR(NF90_NETCDF4, NF90_CLOBBER), ncid)
-    if (status /= NF90_NOERR) CALL handle_error(status, " ")
+  CHECK_NF90(status)
 
   ! Define dimensions
   status = NF90_DEF_DIM(ncid, 'level', m1, dim_m1)
-    if (status /= NF90_NOERR) CALL handle_error(status, " ")
+  CHECK_NF90(status)
   status = NF90_DEF_DIM(ncid, 'latitude', m2, dim_m2)
-    if (status /= NF90_NOERR) CALL handle_error(status, " ")
+  CHECK_NF90(status)
   status = NF90_DEF_DIM(ncid, 'longitude', m3, dim_m3)
-    if (status /= NF90_NOERR) CALL handle_error(status, " ")
+  CHECK_NF90(status)
 
   ! Define Coordinates
   status = NF90_DEF_VAR(ncid, 'latitude', NF90_FLOAT, dim_m2, var_glat)
-    if (status /= NF90_NOERR) CALL handle_error(status, " ")
+  CHECK_NF90(status)
   status = NF90_PUT_ATT(ncid, var_glat, 'units', 'degrees_north')
-    if (status /= NF90_NOERR) CALL handle_error(status, " ")
+  CHECK_NF90(status)
 
   status = NF90_DEF_VAR(ncid, 'longitude', NF90_FLOAT,  dim_m3, var_glon)
-    if (status /= NF90_NOERR) CALL handle_error(status, " ")
+  CHECK_NF90(status)
   status = NF90_PUT_ATT(ncid, var_glon, 'units', 'degrees_east')
-    if (status /= NF90_NOERR) CALL handle_error(status, " ")
+  CHECK_NF90(status)
 
   ! Allocate arrays for species variable IDs
   allocate(var_scp(nspecies), var_sct(nspecies), var_sctdyn(nspecies))
@@ -1229,62 +1642,47 @@ subroutine create_netcdf_file_per_species(time, processor, m1, m2, m3, nspecies,
   DO n = 1, nspecies
     ! Define concentration
     var_name = TRIM(spc_name(n)) // '_concentration'
-    status = NF90_DEF_VAR(ncid, TRIM(var_name), NF90_FLOAT, (/dim_m1, dim_m2, dim_m3/), var_scp(n))
-    if (status /= NF90_NOERR) CALL handle_error(status, " ")
-    status = NF90_DEF_VAR_DEFLATE(ncid, var_scp(n), shuffle=1, deflate=1, deflate_level=1)
-    if (status /= NF90_NOERR) CALL handle_error(status, " ")
+    status = NF90_DEF_VAR(ncid, TRIM(var_name), NF90_FLOAT, [dim_m1, dim_m2, dim_m3], var_scp(n), shuffle=shuffle, deflate_level=1)
+    CHECK_NF90(status)
 
     ! Define tendency
     var_name = TRIM(spc_name(n)) // '_tendency'
-    status = NF90_DEF_VAR(ncid, TRIM(var_name), NF90_FLOAT, (/dim_m1, dim_m2, dim_m3/), var_sct(n))
-    if (status /= NF90_NOERR) CALL handle_error(status, " ")
-    status = NF90_DEF_VAR_DEFLATE(ncid, var_sct(n), shuffle=1, deflate=1, deflate_level=1)
-    if (status /= NF90_NOERR) CALL handle_error(status, " ")
+    status = NF90_DEF_VAR(ncid, TRIM(var_name), NF90_FLOAT, [dim_m1, dim_m2, dim_m3], var_sct(n), shuffle=shuffle, deflate_level=1)
+    CHECK_NF90(status)
 
     ! Define dynamics
     var_name = TRIM(spc_name(n)) // '_dynamics'
-    status = NF90_DEF_VAR(ncid, TRIM(var_name), NF90_FLOAT, (/dim_m1, dim_m2, dim_m3/), var_sctdyn(n))
-    if (status /= NF90_NOERR) CALL handle_error(status, " ")
-    status = NF90_DEF_VAR_DEFLATE(ncid, var_sctdyn(n), shuffle=1, deflate=1, deflate_level=1)
-    if (status /= NF90_NOERR) CALL handle_error(status, " ")
+    status = NF90_DEF_VAR(ncid, TRIM(var_name), NF90_FLOAT, 0, var_sctdyn(n), shuffle=shuffle, deflate_level=1)
+    CHECK_NF90(status)
   END DO
 
   ! End Definitions
   status = NF90_ENDDEF(ncid)
-  if (status /= NF90_NOERR) CALL handle_error(status, "End Def")
+  CHECK_NF90(status)
 
   ! Write Grid Data
-  status = NF90_PUT_VAR(ncid, var_glat, grid_g(1)%glat(1,:), start=[1], count=[m2])
-  if (status /= NF90_NOERR) CALL handle_error(status, "put lat")
-  status = NF90_PUT_VAR(ncid, var_glon, grid_g(1)%glon(:,1), start=[1], count=[m3])
-  if (status /= NF90_NOERR) CALL handle_error(status, "put lon")
+  status = NF90_PUT_VAR(ncid, var_glat, grid_g(1)%glat(:,1), start=[1], count=[m2])
+  CHECK_NF90(status)
+  status = NF90_PUT_VAR(ncid, var_glon, grid_g(1)%glon(1,:), start=[1], count=[m3])
+  CHECK_NF90(status)
 
   ! Write 3D Species Data
-  DO n = 1, nspecies
-    status = NF90_PUT_VAR(ncid, var_scp(n), chem1_g(n)%sc_p, start=(/1, 1, 1/), count=(/m1, m2, m3/))
-    if (status /= NF90_NOERR) CALL handle_error(status, "put concentration")
-    status = NF90_PUT_VAR(ncid, var_sct(n), chem1_g(n)%sc_t, start=(/1, 1, 1/), count=(/m1, m2, m3/))
-    if (status /= NF90_NOERR) CALL handle_error(status, "put tendency")
-    status = NF90_PUT_VAR(ncid, var_sctdyn(n), chem1_g(n)%sc_t_dyn, start=(/1, 1, 1/), count=(/m1, m2, m3/))
-    if (status /= NF90_NOERR) CALL handle_error(status, "put dynamics")
+  do n = 1, nspecies
+    status = NF90_PUT_VAR(ncid, var_scp(n), chem1_g(n)%sc_p, start=[1, 1, 1], count=[m1, m2, m3])
+    CHECK_NF90(status)
+    status = NF90_PUT_VAR(ncid, var_sct(n), chem1_g(n)%sc_t, start=[1, 1, 1], count=[m1, m2, m3])
+    CHECK_NF90(status)
+    status = NF90_PUT_VAR(ncid, var_sctdyn(n), chem1_g(n)%sc_t_dyn, start=[1], count=[1])
+    CHECK_NF90(status)
 
-  END DO
+  end do
 
   status = NF90_CLOSE(ncid)
-    if (status /= NF90_NOERR) CALL handle_error(status, " ")
+  CHECK_NF90(status)
   
   ! Clean up allocations
   deallocate(var_scp, var_sct, var_sctdyn)
 
-CONTAINS
-  subroutine handle_error(status, loc)
-    integer, intent(in) :: status
-    character(len=*), intent(in) :: loc
-    IF (status /= NF90_NOERR) THEN
-        PRINT *, 'Output NetCDF Error [', TRIM(loc), ']: ', TRIM(NF90_STRERROR(status))
-        STOP
-    END IF
-  END subroutine handle_error
 END subroutine create_netcdf_file_per_species
 
 !---------------------------------------------------------------------------------------------------
