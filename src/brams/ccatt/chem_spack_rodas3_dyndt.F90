@@ -1069,7 +1069,7 @@ subroutine write_input(time, processor, m1, m2, m3, nspecies, nr, nr_photo, maxn
   integer :: chem1_sc_t_sizes(nspecies), chem1_sc_t_dyn_sizes(nspecies)
 
 ! Local NetCDF Variables
-  integer :: ncid, status
+  integer :: ncid, status, oldmode
   integer :: d_m1, d_m2, d_m3, d_nspc, d_ntpts, d_nrphoto, d_nr, d_maxspc, d_nob, d_mbsz, d_strlen, d_na_extra3d
  
   integer :: v_block_end, v_indexk, v_indexi, v_indexj
@@ -1098,6 +1098,9 @@ subroutine write_input(time, processor, m1, m2, m3, nspecies, nr, nr_photo, maxn
   print *, "Writing NetCDF Input: ", TRIM(filename)
 
   status = NF90_CREATE(filename, IOR(NF90_NETCDF4, NF90_CLOBBER), ncid)
+  CHECK_NF90(status)
+
+  status = nf90_set_fill(ncid, nf90_nofill, oldmode)
   CHECK_NF90(status)
 
   ! Global Attributes (Scalars)
@@ -1189,7 +1192,7 @@ subroutine write_input(time, processor, m1, m2, m3, nspecies, nr, nr_photo, maxn
   CHECK_NF90(status)
   status = NF90_DEF_VAR(ncid, 'rcp', NF90_FLOAT, [d_m1, d_m2, d_m3], v_rcp, shuffle=shuffle,deflate_level=1)
   CHECK_NF90(status)
-  status = NF90_DEF_VAR(ncid, 'cosz', NF90_FLOAT, [d_m1, d_m2, d_m3], v_cosz, shuffle=shuffle,deflate_level=1)
+  status = NF90_DEF_VAR(ncid, 'cosz', NF90_FLOAT, [d_m2, d_m3], v_cosz, shuffle=shuffle,deflate_level=1)
   CHECK_NF90(status)
   status = NF90_DEF_VAR(ncid, 'weight', NF90_FLOAT, d_nspc, v_weight, shuffle=shuffle,deflate_level=1)
   CHECK_NF90(status)
@@ -1483,17 +1486,17 @@ end subroutine write_output
 
 subroutine create_netcdf_file(time, processor, m1, m2, m3, nspecies, chem1_g)
   USE netcdf
+
   IMPLICIT NONE
 
   integer, intent(in) :: m1, m2, m3, nspecies, processor
   real, intent(in)    :: time
   type(chem1_vars), intent(inout) :: chem1_g(nspecies)
 
-  integer :: ncid, status
+  integer :: ncid, status, oldmode
   integer :: dim_m1, dim_m2, dim_m3, dim_nspecies, dim_ntpts, dim_strlen
-  integer :: var_m1, var_m2, var_m3, var_nspecies
-  integer :: var_glat, var_glon, var_spc_name
-  integer :: var_scp, var_sct, var_sctdyn
+  integer :: v_glat, v_glon, v_spc_name
+  integer :: v_scp, v_sct, v_sctdyn
   integer :: i, n, str_len, ntpts, ispc
   integer :: chem1_sc_t_sizes(nspecies), chem1_sc_t_dyn_sizes(nspecies)
 
@@ -1512,6 +1515,9 @@ subroutine create_netcdf_file(time, processor, m1, m2, m3, nspecies, chem1_g)
   write(filename, fmt='("chem_ia/chem_out_",I6.6,"-",I4.4,".nc4")') int(time), processor
 
   status = NF90_CREATE(TRIM(filename), OR(NF90_NETCDF4, NF90_CLOBBER), ncid)
+  CHECK_NF90(status)
+
+  status = nf90_set_fill(ncid, nf90_nofill, oldmode)
   CHECK_NF90(status)
 
   status = NF90_PUT_ATT(ncid, NF90_GLOBAL, 'processor', processor)
@@ -1533,56 +1539,56 @@ subroutine create_netcdf_file(time, processor, m1, m2, m3, nspecies, chem1_g)
   status = NF90_DEF_DIM(ncid, 'ntpts', ntpts, dim_ntpts)
 
   ! Define Coordinates
-  status = NF90_DEF_VAR(ncid, 'latitude', NF90_FLOAT, dim_m2, var_glat)
+  status = NF90_DEF_VAR(ncid, 'latitude', NF90_FLOAT, dim_m2, v_glat)
   CHECK_NF90(status)
-  status = NF90_PUT_ATT(ncid, var_glat, 'units', 'degrees_north')
+  status = NF90_PUT_ATT(ncid, v_glat, 'units', 'degrees_north')
   CHECK_NF90(status)
 
-  status = NF90_DEF_VAR(ncid, 'longitude', NF90_FLOAT,  dim_m3, var_glon)
+  status = NF90_DEF_VAR(ncid, 'longitude', NF90_FLOAT,  dim_m3, v_glon)
   CHECK_NF90(status)
-  status = NF90_PUT_ATT(ncid, var_glon, 'units', 'degrees_east')
+  status = NF90_PUT_ATT(ncid, v_glon, 'units', 'degrees_east')
   CHECK_NF90(status)
 
   ! Define Species Names Variable
-  status = NF90_DEF_VAR(ncid, 'species_names', NF90_CHAR, [dim_strlen, dim_nspecies], var_spc_name)
+  status = NF90_DEF_VAR(ncid, 'species_names', NF90_CHAR, [dim_strlen, dim_nspecies], v_spc_name)
   CHECK_NF90(status)
 
   ! Define Main Variables 
-  status = NF90_DEF_VAR(ncid, 'concentration', NF90_FLOAT, [dim_m1, dim_m2, dim_m3, dim_nspecies], var_scp, shuffle=shuffle, deflate_level=1)
+  status = NF90_DEF_VAR(ncid, 'concentration', NF90_FLOAT, [dim_m1, dim_m2, dim_m3, dim_nspecies], v_scp, shuffle=shuffle, deflate_level=1)
   CHECK_NF90(status)
 
-  status = NF90_DEF_VAR(ncid, 'tendency', NF90_FLOAT, [dim_ntpts, dim_nspecies], var_sct, shuffle=shuffle, deflate_level=1)
+  status = NF90_DEF_VAR(ncid, 'tendency', NF90_FLOAT, [dim_ntpts, dim_nspecies], v_sct, shuffle=shuffle, deflate_level=1)
   CHECK_NF90(status)
-  status = NF90_PUT_ATT(ncid, var_sct, 'species_sizes', chem1_sc_t_sizes)
+  status = NF90_PUT_ATT(ncid, v_sct, 'species_sizes', chem1_sc_t_sizes)
 
-  status = NF90_DEF_VAR(ncid, 'dynamics', NF90_FLOAT, [dim_nspecies], var_sctdyn, shuffle=shuffle, deflate_level=1)
+  status = NF90_DEF_VAR(ncid, 'dynamics', NF90_FLOAT, [dim_nspecies], v_sctdyn, shuffle=shuffle, deflate_level=1)
   CHECK_NF90(status)
-  status = NF90_PUT_ATT(ncid, var_sctdyn, 'species_sizes', chem1_sc_t_dyn_sizes)
+  status = NF90_PUT_ATT(ncid, v_sctdyn, 'species_sizes', chem1_sc_t_dyn_sizes)
 
   ! End Definitions
   status = NF90_ENDDEF(ncid)
   CHECK_NF90(status)
 
   ! Write Grid Data
-  status = NF90_PUT_VAR(ncid, var_glat, grid_g(1)%glat(:,1),start=[1],count=[m2])
+  status = NF90_PUT_VAR(ncid, v_glat, grid_g(1)%glat(:,1),start=[1],count=[m2])
   CHECK_NF90(status)
-  status = NF90_PUT_VAR(ncid, var_glon, grid_g(1)%glon(1,:),start=[1],count=[m3])
+  status = NF90_PUT_VAR(ncid, v_glon, grid_g(1)%glon(1,:),start=[1],count=[m3])
   CHECK_NF90(status)
 
   ! Write Species Names
   DO n = 1, nspecies
     str_len = MAX(1, LEN_TRIM(spc_name(n)))
-    status = NF90_PUT_VAR(ncid, var_spc_name, TRIM(spc_name(n)), start=[1, n], count=[str_len, 1])
+    status = NF90_PUT_VAR(ncid, v_spc_name, TRIM(spc_name(n)), start=[1, n], count=[str_len, 1])
     CHECK_NF90(status)
   END DO
 
   ! Write 4D Species Data
   DO n = 1, nspecies
-    status = NF90_PUT_VAR(ncid, var_scp, chem1_g(n)%sc_p, start=[1, 1, 1, n], count=[m1, m2, m3, 1])
+    status = NF90_PUT_VAR(ncid, v_scp, chem1_g(n)%sc_p, start=[1, 1, 1, n], count=[m1, m2, m3, 1])
     CHECK_NF90(status)
-    status = NF90_PUT_VAR(ncid, var_sct, chem1_g(n)%sc_t, start=[1, n], count=[chem1_sc_t_sizes(n), 1])
+    status = NF90_PUT_VAR(ncid, v_sct, chem1_g(n)%sc_t, start=[1, n], count=[chem1_sc_t_sizes(n), 1])
     CHECK_NF90(status)
-    status = NF90_PUT_VAR(ncid, var_sctdyn, chem1_g(n)%sc_t_dyn, start=[n], count=[1])
+    status = NF90_PUT_VAR(ncid, v_sctdyn, chem1_g(n)%sc_t_dyn, start=[n], count=[1])
     CHECK_NF90(status)
   END DO
 
@@ -1600,12 +1606,12 @@ subroutine create_netcdf_file_per_species(time, processor, m1, m2, m3, nspecies,
   real, intent(in)    :: time
   type(chem1_vars), intent(inout) :: chem1_g(nspecies)
 
-  integer :: ncid, status
+  integer :: ncid, status, oldmode
   integer :: dim_m1, dim_m2, dim_m3
-  integer :: var_glat, var_glon
+  integer :: v_glat, v_glon
   
   ! Arrays to hold the variable IDs for each species
-  integer, allocatable :: var_scp(:), var_sct(:), var_sctdyn(:)
+  integer, allocatable :: v_scp(:), v_sct(:), v_sctdyn(:)
   integer :: i, n, ispc
   character(len=64) :: filename
   character(len=128) :: var_name
@@ -1614,6 +1620,9 @@ subroutine create_netcdf_file_per_species(time, processor, m1, m2, m3, nspecies,
   write(filename, fmt='("chem_ia/chem_out_",I6.6,"-",I4.4,".nc4")') int(time), processor
 
   status = NF90_CREATE(TRIM(filename), OR(NF90_NETCDF4, NF90_CLOBBER), ncid)
+  CHECK_NF90(status)
+
+  status = nf90_set_fill(ncid, nf90_nofill, oldmode)
   CHECK_NF90(status)
 
   ! Define dimensions
@@ -1625,34 +1634,34 @@ subroutine create_netcdf_file_per_species(time, processor, m1, m2, m3, nspecies,
   CHECK_NF90(status)
 
   ! Define Coordinates
-  status = NF90_DEF_VAR(ncid, 'latitude', NF90_FLOAT, dim_m2, var_glat)
+  status = NF90_DEF_VAR(ncid, 'latitude', NF90_FLOAT, dim_m2, v_glat)
   CHECK_NF90(status)
-  status = NF90_PUT_ATT(ncid, var_glat, 'units', 'degrees_north')
+  status = NF90_PUT_ATT(ncid, v_glat, 'units', 'degrees_north')
   CHECK_NF90(status)
 
-  status = NF90_DEF_VAR(ncid, 'longitude', NF90_FLOAT,  dim_m3, var_glon)
+  status = NF90_DEF_VAR(ncid, 'longitude', NF90_FLOAT,  dim_m3, v_glon)
   CHECK_NF90(status)
-  status = NF90_PUT_ATT(ncid, var_glon, 'units', 'degrees_east')
+  status = NF90_PUT_ATT(ncid, v_glon, 'units', 'degrees_east')
   CHECK_NF90(status)
 
   ! Allocate arrays for species variable IDs
-  allocate(var_scp(nspecies), var_sct(nspecies), var_sctdyn(nspecies))
+  allocate(v_scp(nspecies), v_sct(nspecies), v_sctdyn(nspecies))
 
   ! Define Variables per species WITH DEFLATE AND SHUFFLE
   DO n = 1, nspecies
     ! Define concentration
     var_name = TRIM(spc_name(n)) // '_concentration'
-    status = NF90_DEF_VAR(ncid, TRIM(var_name), NF90_FLOAT, [dim_m1, dim_m2, dim_m3], var_scp(n), shuffle=shuffle, deflate_level=1)
+    status = NF90_DEF_VAR(ncid, TRIM(var_name), NF90_FLOAT, [dim_m1, dim_m2, dim_m3], v_scp(n), shuffle=shuffle, deflate_level=1)
     CHECK_NF90(status)
 
     ! Define tendency
     var_name = TRIM(spc_name(n)) // '_tendency'
-    status = NF90_DEF_VAR(ncid, TRIM(var_name), NF90_FLOAT, [dim_m1, dim_m2, dim_m3], var_sct(n), shuffle=shuffle, deflate_level=1)
+    status = NF90_DEF_VAR(ncid, TRIM(var_name), NF90_FLOAT, [dim_m1, dim_m2, dim_m3], v_sct(n), shuffle=shuffle, deflate_level=1)
     CHECK_NF90(status)
 
     ! Define dynamics
     var_name = TRIM(spc_name(n)) // '_dynamics'
-    status = NF90_DEF_VAR(ncid, TRIM(var_name), NF90_FLOAT, 0, var_sctdyn(n), shuffle=shuffle, deflate_level=1)
+    status = NF90_DEF_VAR(ncid, TRIM(var_name), NF90_FLOAT, 0, v_sctdyn(n), shuffle=shuffle, deflate_level=1)
     CHECK_NF90(status)
   END DO
 
@@ -1661,18 +1670,18 @@ subroutine create_netcdf_file_per_species(time, processor, m1, m2, m3, nspecies,
   CHECK_NF90(status)
 
   ! Write Grid Data
-  status = NF90_PUT_VAR(ncid, var_glat, grid_g(1)%glat(:,1), start=[1], count=[m2])
+  status = NF90_PUT_VAR(ncid, v_glat, grid_g(1)%glat(:,1), start=[1], count=[m2])
   CHECK_NF90(status)
-  status = NF90_PUT_VAR(ncid, var_glon, grid_g(1)%glon(1,:), start=[1], count=[m3])
+  status = NF90_PUT_VAR(ncid, v_glon, grid_g(1)%glon(1,:), start=[1], count=[m3])
   CHECK_NF90(status)
 
   ! Write 3D Species Data
   do n = 1, nspecies
-    status = NF90_PUT_VAR(ncid, var_scp(n), chem1_g(n)%sc_p, start=[1, 1, 1], count=[m1, m2, m3])
+    status = NF90_PUT_VAR(ncid, v_scp(n), chem1_g(n)%sc_p, start=[1, 1, 1], count=[m1, m2, m3])
     CHECK_NF90(status)
-    status = NF90_PUT_VAR(ncid, var_sct(n), chem1_g(n)%sc_t, start=[1, 1, 1], count=[m1, m2, m3])
+    status = NF90_PUT_VAR(ncid, v_sct(n), chem1_g(n)%sc_t, start=[1, 1, 1], count=[m1, m2, m3])
     CHECK_NF90(status)
-    status = NF90_PUT_VAR(ncid, var_sctdyn(n), chem1_g(n)%sc_t_dyn, start=[1], count=[1])
+    status = NF90_PUT_VAR(ncid, v_sctdyn(n), chem1_g(n)%sc_t_dyn, start=[1], count=[1])
     CHECK_NF90(status)
 
   end do
@@ -1681,7 +1690,7 @@ subroutine create_netcdf_file_per_species(time, processor, m1, m2, m3, nspecies,
   CHECK_NF90(status)
   
   ! Clean up allocations
-  deallocate(var_scp, var_sct, var_sctdyn)
+  deallocate(v_scp, v_sct, v_sctdyn)
 
 END subroutine create_netcdf_file_per_species
 
